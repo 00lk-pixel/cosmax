@@ -1,0 +1,1489 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🌍 세계 시차 & 날씨 변환기</title>
+<meta name="description" content="비행 도착 시간 계산, 실시간 날씨, 옷차림 추천, 항공편 위치 추적까지 픽셀 감성으로 한번에! ✈️☁️">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8C%8D%3C/text%3E%3C/svg%3E">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="Hey, I miss you">
+<meta property="og:description" content="See you soon my love">
+
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="Hey, I miss you">
+<meta name="twitter:description" content="See you soon my love">
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/galmuri/dist/galmuri.css">
+<style>
+  * { box-sizing: border-box; }
+  html, body {
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Galmuri11', -apple-system, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+    background: #10131c;
+    padding: 16px;
+  }
+
+  /* ---- 모바일: 화면 축소(scale) 대신 세로 1단 스택 + 자연 스크롤 ---- */
+  @media (max-width: 700px) {
+    html, body {
+      height: auto;
+      min-height: 100%;
+      overflow-y: auto;
+      overflow-x: hidden;
+    }
+    body {
+      display: block;
+      padding: 14px 12px 32px;
+    }
+  }
+
+  #bgCanvas {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .app {
+    width: 100%;
+    max-width: 780px;
+    transform-origin: center center;
+    transition: transform 0.15s ease;
+  }
+
+  /* ---- 픽셀 게임풍 날씨 HUD ---- */
+  .weather-hud {
+    position: relative;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    background: rgba(10, 12, 24, 0.62);
+    border: 3px solid #eef1f8;
+    border-radius: 6px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.4);
+    padding: 14px 18px;
+    margin-bottom: 14px;
+    color: #fff;
+  }
+  .hud-badge {
+    position: absolute;
+    top: -12px; right: 12px;
+    font-family: 'Galmuri9', monospace;
+    font-size: 9px;
+    background: #ffd23c;
+    color: #3a2a00;
+    padding: 3px 8px;
+    border-radius: 4px;
+    border: 2px solid #1a1a2e;
+  }
+  .hud-temp {
+    font-family: 'Galmuri14', monospace;
+    font-size: 32px;
+    text-shadow: 2px 2px 0 rgba(0,0,0,0.45);
+  }
+  .hud-city {
+    font-family: 'Galmuri11', monospace;
+    font-size: 13px;
+    font-weight: 700;
+  }
+  .hud-desc {
+    font-family: 'Galmuri9', monospace;
+    font-size: 11px;
+    opacity: 0.85;
+    margin-top: 3px;
+  }
+  .hud-chips {
+    margin-left: auto;
+    display: flex;
+    gap: 8px;
+  }
+  .hud-chip {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    background: rgba(255,255,255,0.14);
+    border: 2px solid rgba(255,255,255,0.5);
+    border-radius: 5px;
+    padding: 6px 9px;
+    font-family: 'Galmuri9', monospace;
+    font-size: 10px;
+    line-height: 1;
+    white-space: nowrap;
+    text-align: center;
+  }
+  .outfit-chip {
+    gap: 6px;
+  }
+  #outfitCanvas {
+    width: 22px;
+    height: 29px;
+    flex-shrink: 0;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .span2 { grid-column: 1 / -1; }
+
+  @media (max-width: 700px) {
+    .grid {
+      grid-template-columns: 1fr;
+    }
+  }
+  .card {
+    display: flex;
+    flex-direction: column;
+    background: rgba(255, 255, 255, 0.9);
+    border: 3px solid #1a1a2e;
+    border-radius: 8px;
+    padding: 18px;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.35);
+  }
+  label {
+    display: block;
+    font-family: 'Galmuri9', monospace;
+    font-size: 11px;
+    color: #3a4055;
+    margin-bottom: 5px;
+  }
+  .toggle-label {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    cursor: pointer;
+    margin-bottom: 8px;
+  }
+  .toggle-label input[type="checkbox"] {
+    width: 15px;
+    height: 15px;
+    accent-color: #17a897;
+    cursor: pointer;
+  }
+  .live-select-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .live-select-row select {
+    flex: 1 1 0%;
+    min-width: 0;
+    margin-bottom: 0;
+  }
+  .btn.refresh-btn {
+    flex: 0 0 auto;
+    width: auto;
+    padding: 10px 14px;
+    background: #eef2fa;
+  }
+  input[type="datetime-local"], input[type="text"], input[type="number"], select {
+    width: 100%;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: 'Galmuri9', monospace;
+    border: 2px solid #1a1a2e;
+    border-radius: 6px;
+    outline: none;
+    margin-bottom: 12px;
+    background: #fdfdfb;
+    color: #1a1a2e;
+  }
+  input[type="datetime-local"]:focus, input[type="text"]:focus, input[type="number"]:focus, select:focus {
+    border-color: #17a897;
+    box-shadow: 0 0 0 3px rgba(23, 168, 151, 0.25);
+  }
+  .btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 12px;
+    font-family: 'Galmuri11', monospace;
+    font-size: 14px;
+    line-height: 1;
+    border: 3px solid #1a1a2e;
+    border-radius: 8px;
+    background: #ffd23c;
+    color: #3a2a00;
+    cursor: pointer;
+    box-shadow: 3px 3px 0 rgba(0,0,0,0.4);
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+  .btn:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 rgba(0,0,0,0.4); }
+  .btn:active { transform: translate(1px, 1px); box-shadow: 1px 1px 0 rgba(0,0,0,0.4); }
+
+  .time-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+  }
+  .time-box {
+    flex: 1;
+    text-align: center;
+    padding: 12px 8px;
+    border-radius: 6px;
+    background: #eef2fa;
+    border: 2px solid #1a1a2e;
+  }
+  .time-box .loc {
+    font-family: 'Galmuri9', monospace;
+    font-size: 10px;
+    color: #55607a;
+    margin-bottom: 4px;
+  }
+  .time-box .time {
+    font-family: 'Galmuri14', monospace;
+    font-size: 17px;
+    color: #1a1a2e;
+  }
+  .time-box .date {
+    font-family: 'Galmuri9', monospace;
+    font-size: 9px;
+    color: #8b93a8;
+    margin-top: 3px;
+  }
+  .arrow {
+    font-size: 16px;
+    color: #17a897;
+  }
+  .diff {
+    text-align: center;
+    font-family: 'Galmuri9', monospace;
+    font-size: 11px;
+    color: #55607a;
+    margin-top: 12px;
+  }
+
+  .section-title {
+    font-family: 'Galmuri11', monospace;
+    font-size: 12px;
+    color: #1a1a2e;
+    margin: 0 0 10px;
+  }
+  .flight-duration-row {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 12px;
+  }
+  .flight-duration-row input {
+    flex: 1;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-family: 'Galmuri9', monospace;
+    border: 2px solid #1a1a2e;
+    border-radius: 6px;
+    outline: none;
+    margin-bottom: 0;
+    background: #fdfdfb;
+  }
+  .globe-row {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 14px;
+  }
+  #globeCanvas {
+    display: block;
+    width: 100%;
+    height: 140px;
+    image-rendering: pixelated;
+    image-rendering: -moz-crisp-edges;
+    image-rendering: crisp-edges;
+    border: 3px solid #1a1a2e;
+    border-radius: 10px;
+    background: #060814;
+    box-shadow: 4px 4px 0 rgba(0,0,0,0.35);
+  }
+  .globe-info {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    font-family: 'Galmuri9', monospace;
+    font-size: 12px;
+    color: #3a4055;
+    line-height: 1.9;
+  }
+  .globe-info b {
+    font-family: 'Galmuri11', monospace;
+    color: #1a1a2e;
+  }
+  .track-error {
+    font-family: 'Galmuri9', monospace;
+    font-size: 11px;
+    color: #a4222c;
+    background: #ffe3e3;
+    border: 2px solid #a4222c;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-top: 10px;
+    text-align: center;
+  }
+
+  /* ---- 모바일: HUD를 줄바꿈해서 칩이 잘리지 않게 ---- */
+  @media (max-width: 560px) {
+    .weather-hud {
+      flex-wrap: wrap;
+      row-gap: 10px;
+    }
+    .hud-chips {
+      margin-left: 0;
+      width: 100%;
+      justify-content: space-between;
+      flex-wrap: wrap;
+    }
+  }
+
+  @media (max-width: 400px) {
+    .card { padding: 14px; }
+    .time-box .time { font-size: 15px; }
+    .hud-temp { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+  <canvas id="bgCanvas"></canvas>
+
+  <div class="app" id="app">
+    <div class="weather-hud" id="weatherHud">
+      <div class="hud-badge" id="weatherBadge">불러오는 중...</div>
+      <div class="hud-temp" id="weatherTemp">--</div>
+      <div>
+        <div class="hud-city" id="weatherCity"></div>
+        <div class="hud-desc" id="weatherDesc"></div>
+      </div>
+      <div class="hud-chips">
+        <div class="hud-chip">💧 <span id="weatherHumidity"></span></div>
+        <div class="hud-chip">🌬️ <span id="weatherWind"></span></div>
+        <div class="hud-chip outfit-chip">
+          <canvas id="outfitCanvas" width="20" height="26"></canvas>
+          <span id="outfitLabel"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="section-title">✈️ 비행 도착 시간 계산기</div>
+
+        <label for="flightFrom">출발 도시</label>
+        <select id="flightFrom"></select>
+
+        <label for="departTime">출발 일시 (출발지 현지 시각 기준)</label>
+        <input type="datetime-local" id="departTime">
+
+        <label>비행 시간</label>
+        <div class="flight-duration-row">
+          <input type="number" id="flightHours" min="0" placeholder="시간" value="14">
+          <input type="number" id="flightMinutes" min="0" max="59" placeholder="분" value="0">
+        </div>
+
+        <label for="flightTo">도착 도시</label>
+        <select id="flightTo"></select>
+
+        <button class="btn" id="flightBtn">도착 시간 계산</button>
+
+        <div style="margin-top:14px;">
+          <div class="time-row">
+            <div class="time-box">
+              <div class="loc" id="flightFromLabel"></div>
+              <div class="time" id="flightDepartOut"></div>
+              <div class="date" id="flightDepartDateOut"></div>
+            </div>
+            <div class="arrow">✈️</div>
+            <div class="time-box">
+              <div class="loc" id="flightToLabel"></div>
+              <div class="time" id="flightArriveOut"></div>
+              <div class="date" id="flightArriveDateOut"></div>
+            </div>
+          </div>
+          <div class="diff" id="flightDurationOut"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="section-title">🛰️ 실시간 항공편 위치 추적</div>
+
+        <label for="avKey">AviationStack API 키 (비워두면 기본 키 사용)</label>
+        <input type="text" id="avKey" placeholder="비워두면 내장된 키로 자동 조회">
+
+        <label class="toggle-label" for="liveListToggle">
+          <input type="checkbox" id="liveListToggle">
+          지금 떠 있는 항공편 중에서 고르기
+        </label>
+
+        <label for="flightNumber">편명 (IATA 코드)</label>
+        <input type="text" id="flightNumber" placeholder="예: KE081">
+        <div class="live-select-row" id="liveSelectRow" style="display:none;">
+          <select id="liveFlightSelect"></select>
+          <button type="button" class="btn refresh-btn" id="liveListRefresh">↻</button>
+        </div>
+
+        <button class="btn" id="trackBtn">조회</button>
+
+        <div class="track-error" id="trackError" style="display:none;"></div>
+
+        <div id="trackResult" style="margin-top:14px; display:none;">
+          <div class="diff" id="trackStatus" style="margin-top:0; font-weight:700;"></div>
+          <div class="time-row" id="trackScheduleRow" style="margin-top:10px;">
+            <div class="time-box">
+              <div class="loc" id="trackDepLabel"></div>
+              <div class="time" id="trackDepTime"></div>
+              <div class="date" id="trackDepDelay"></div>
+            </div>
+            <div class="arrow">✈️</div>
+            <div class="time-box">
+              <div class="loc" id="trackArrLabel"></div>
+              <div class="time" id="trackArrTime"></div>
+              <div class="date" id="trackArrDelay"></div>
+            </div>
+          </div>
+          <div class="diff" id="trackLive"></div>
+        </div>
+
+        <div class="globe-row">
+          <canvas id="globeCanvas"></canvas>
+          <div class="globe-info" id="globeInfo">편명을 조회하면 항공기 위치가 지구본에 표시돼요.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // 지역 목록: 표시 이름, IANA 타임존, 위경도(실시간 날씨 조회용)
+  const locations = [
+    // 대한민국
+    { id: "seoul", label: "🇰🇷 서울", tz: "Asia/Seoul", lat: 37.5665, lon: 126.9780 },
+    { id: "busan", label: "🇰🇷 부산", tz: "Asia/Seoul", lat: 35.1796, lon: 129.0756 },
+    { id: "jeju", label: "🇰🇷 제주", tz: "Asia/Seoul", lat: 33.4996, lon: 126.5312 },
+
+    // 동아시아
+    { id: "tokyo", label: "🇯🇵 도쿄", tz: "Asia/Tokyo", lat: 35.6762, lon: 139.6503 },
+    { id: "osaka", label: "🇯🇵 오사카", tz: "Asia/Tokyo", lat: 34.6937, lon: 135.5023 },
+    { id: "beijing", label: "🇨🇳 베이징", tz: "Asia/Shanghai", lat: 39.9042, lon: 116.4074 },
+    { id: "shanghai", label: "🇨🇳 상하이", tz: "Asia/Shanghai", lat: 31.2304, lon: 121.4737 },
+    { id: "hongkong", label: "🇭🇰 홍콩", tz: "Asia/Hong_Kong", lat: 22.3193, lon: 114.1694 },
+    { id: "taipei", label: "🇹🇼 타이베이", tz: "Asia/Taipei", lat: 25.0330, lon: 121.5654 },
+
+    // 동남아시아
+    { id: "singapore", label: "🇸🇬 싱가포르", tz: "Asia/Singapore", lat: 1.3521, lon: 103.8198 },
+    { id: "bangkok", label: "🇹🇭 방콕", tz: "Asia/Bangkok", lat: 13.7563, lon: 100.5018 },
+    { id: "hanoi", label: "🇻🇳 하노이", tz: "Asia/Bangkok", lat: 21.0278, lon: 105.8342 },
+    { id: "manila", label: "🇵🇭 마닐라", tz: "Asia/Manila", lat: 14.5995, lon: 120.9842 },
+    { id: "kualalumpur", label: "🇲🇾 쿠알라룸푸르", tz: "Asia/Kuala_Lumpur", lat: 3.1390, lon: 101.6869 },
+    { id: "jakarta", label: "🇮🇩 자카르타", tz: "Asia/Jakarta", lat: -6.2088, lon: 106.8456 },
+
+    // 남아시아 · 중동
+    { id: "mumbai", label: "🇮🇳 뭄바이", tz: "Asia/Kolkata", lat: 19.0760, lon: 72.8777 },
+    { id: "delhi", label: "🇮🇳 델리", tz: "Asia/Kolkata", lat: 28.6139, lon: 77.2090 },
+    { id: "dubai", label: "🇦🇪 두바이", tz: "Asia/Dubai", lat: 25.2048, lon: 55.2708 },
+    { id: "doha", label: "🇶🇦 도하", tz: "Asia/Qatar", lat: 25.2854, lon: 51.5310 },
+    { id: "telaviv", label: "🇮🇱 텔아비브", tz: "Asia/Jerusalem", lat: 32.0853, lon: 34.7818 },
+    { id: "istanbul", label: "🇹🇷 이스탄불", tz: "Europe/Istanbul", lat: 41.0082, lon: 28.9784 },
+
+    // 유럽
+    { id: "london", label: "🇬🇧 런던", tz: "Europe/London", lat: 51.5072, lon: -0.1276 },
+    { id: "torquay", label: "🇬🇧 영국 토키", tz: "Europe/London", lat: 50.4619, lon: -3.5253 },
+    { id: "paris", label: "🇫🇷 파리", tz: "Europe/Paris", lat: 48.8566, lon: 2.3522 },
+    { id: "berlin", label: "🇩🇪 베를린", tz: "Europe/Berlin", lat: 52.5200, lon: 13.4050 },
+    { id: "frankfurt", label: "🇩🇪 프랑크푸르트", tz: "Europe/Berlin", lat: 50.1109, lon: 8.6821 },
+    { id: "amsterdam", label: "🇳🇱 암스테르담", tz: "Europe/Amsterdam", lat: 52.3676, lon: 4.9041 },
+    { id: "madrid", label: "🇪🇸 마드리드", tz: "Europe/Madrid", lat: 40.4168, lon: -3.7038 },
+    { id: "rome", label: "🇮🇹 로마", tz: "Europe/Rome", lat: 41.9028, lon: 12.4964 },
+    { id: "zurich", label: "🇨🇭 취리히", tz: "Europe/Zurich", lat: 47.3769, lon: 8.5417 },
+    { id: "vienna", label: "🇦🇹 비엔나", tz: "Europe/Vienna", lat: 48.2082, lon: 16.3738 },
+    { id: "moscow", label: "🇷🇺 모스크바", tz: "Europe/Moscow", lat: 55.7558, lon: 37.6173 },
+
+    // 북미
+    { id: "newjersey", label: "🇺🇸 뉴저지", tz: "America/New_York", lat: 40.0583, lon: -74.4057 },
+    { id: "newyork", label: "🇺🇸 뉴욕", tz: "America/New_York", lat: 40.7128, lon: -74.0060 },
+    { id: "washingtondc", label: "🇺🇸 워싱턴 D.C.", tz: "America/New_York", lat: 38.9072, lon: -77.0369 },
+    { id: "chicago", label: "🇺🇸 시카고", tz: "America/Chicago", lat: 41.8781, lon: -87.6298 },
+    { id: "dallas", label: "🇺🇸 댈러스", tz: "America/Chicago", lat: 32.7767, lon: -96.7970 },
+    { id: "denver", label: "🇺🇸 덴버", tz: "America/Denver", lat: 39.7392, lon: -104.9903 },
+    { id: "losangeles", label: "🇺🇸 로스앤젤레스", tz: "America/Los_Angeles", lat: 34.0522, lon: -118.2437 },
+    { id: "sanfrancisco", label: "🇺🇸 샌프란시스코", tz: "America/Los_Angeles", lat: 37.7749, lon: -122.4194 },
+    { id: "seattle", label: "🇺🇸 시애틀", tz: "America/Los_Angeles", lat: 47.6062, lon: -122.3321 },
+    { id: "toronto", label: "🇨🇦 토론토", tz: "America/Toronto", lat: 43.6532, lon: -79.3832 },
+    { id: "vancouver", label: "🇨🇦 밴쿠버", tz: "America/Vancouver", lat: 49.2827, lon: -123.1207 },
+    { id: "mexicocity", label: "🇲🇽 멕시코시티", tz: "America/Mexico_City", lat: 19.4326, lon: -99.1332 },
+
+    // 중남미
+    { id: "saopaulo", label: "🇧🇷 상파울루", tz: "America/Sao_Paulo", lat: -23.5505, lon: -46.6333 },
+    { id: "buenosaires", label: "🇦🇷 부에노스아이레스", tz: "America/Argentina/Buenos_Aires", lat: -34.6037, lon: -58.3816 },
+    { id: "santiago", label: "🇨🇱 산티아고", tz: "America/Santiago", lat: -33.4489, lon: -70.6693 },
+    { id: "lima", label: "🇵🇪 리마", tz: "America/Lima", lat: -12.0464, lon: -77.0428 },
+    { id: "bogota", label: "🇨🇴 보고타", tz: "America/Bogota", lat: 4.7110, lon: -74.0721 },
+
+    // 오세아니아
+    { id: "sydney", label: "🇦🇺 시드니", tz: "Australia/Sydney", lat: -33.8688, lon: 151.2093 },
+    { id: "melbourne", label: "🇦🇺 멜버른", tz: "Australia/Melbourne", lat: -37.8136, lon: 144.9631 },
+    { id: "auckland", label: "🇳🇿 오클랜드", tz: "Pacific/Auckland", lat: -36.8485, lon: 174.7633 },
+
+    // 아프리카
+    { id: "cairo", label: "🇪🇬 카이로", tz: "Africa/Cairo", lat: 30.0444, lon: 31.2357 },
+    { id: "johannesburg", label: "🇿🇦 요하네스버그", tz: "Africa/Johannesburg", lat: -26.2041, lon: 28.0473 },
+    { id: "nairobi", label: "🇰🇪 나이로비", tz: "Africa/Nairobi", lat: -1.2921, lon: 36.8219 }
+  ];
+
+  function populateSelect(selectEl) {
+    locations.forEach(loc => {
+      const opt = document.createElement("option");
+      opt.value = loc.id;
+      opt.textContent = loc.label;
+      selectEl.appendChild(opt);
+    });
+  }
+
+  // 기본값: 현재 로컬 시간
+  const now = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const localValue = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  function findLoc(id) {
+    return locations.find(l => l.id === id);
+  }
+
+  function formatInTz(date, timeZone) {
+    const timeFmt = new Intl.DateTimeFormat("ko-KR", {
+      timeZone, hour: "2-digit", minute: "2-digit", hour12: false
+    });
+    const dateFmt = new Intl.DateTimeFormat("ko-KR", {
+      timeZone, year: "numeric", month: "long", day: "numeric", weekday: "short"
+    });
+    return { time: timeFmt.format(date), date: dateFmt.format(date) };
+  }
+
+  function getUtcOffsetMinutes(date, timeZone) {
+    const dtf = new Intl.DateTimeFormat("en-US", {
+      timeZone, hour: "2-digit", minute: "2-digit", hour12: false,
+      year: "numeric", month: "2-digit", day: "2-digit"
+    });
+    const parts = dtf.formatToParts(date).reduce((acc, p) => {
+      acc[p.type] = p.value;
+      return acc;
+    }, {});
+    const asUTC = Date.UTC(
+      parts.year, parts.month - 1, parts.day,
+      parts.hour === "24" ? 0 : parts.hour, parts.minute
+    );
+    return (asUTC - date.getTime()) / 60000;
+  }
+
+  // Open-Meteo 날씨 코드(WMO) -> 설명/장면(카테고리) 매핑
+  function weatherCodeInfo(code) {
+    const map = {
+      0: { desc: "맑음", category: "clear" },
+      1: { desc: "대체로 맑음", category: "partlycloudy" },
+      2: { desc: "구름 조금", category: "partlycloudy" },
+      3: { desc: "흐림", category: "cloudy" },
+      45: { desc: "안개", category: "fog" },
+      48: { desc: "짙은 안개", category: "fog" },
+      51: { desc: "약한 이슬비", category: "rain" },
+      53: { desc: "이슬비", category: "rain" },
+      55: { desc: "강한 이슬비", category: "rain" },
+      61: { desc: "약한 비", category: "rain" },
+      63: { desc: "비", category: "rain" },
+      65: { desc: "강한 비", category: "rain" },
+      71: { desc: "약한 눈", category: "snow" },
+      73: { desc: "눈", category: "snow" },
+      75: { desc: "강한 눈", category: "snow" },
+      80: { desc: "약한 소나기", category: "rain" },
+      81: { desc: "소나기", category: "rain" },
+      82: { desc: "강한 소나기", category: "rain" },
+      95: { desc: "뇌우", category: "thunder" },
+      96: { desc: "우박 동반 뇌우", category: "thunder" },
+      99: { desc: "강한 우박 동반 뇌우", category: "thunder" }
+    };
+    return map[code] || { desc: "정보 없음", category: "cloudy" };
+  }
+
+  async function fetchWeather(loc) {
+    const url = "https://api.open-meteo.com/v1/forecast?latitude=" + loc.lat +
+      "&longitude=" + loc.lon +
+      "&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,is_day&timezone=auto";
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("weather fetch failed");
+    const data = await res.json();
+    const cur = data.current;
+    const info = weatherCodeInfo(cur.weather_code);
+    return {
+      temp: Math.round(cur.temperature_2m) + "°C",
+      desc: info.desc,
+      category: info.category,
+      isDay: cur.is_day === 1,
+      humidity: "습도 " + Math.round(cur.relative_humidity_2m) + "%",
+      wind: "풍속 " + cur.wind_speed_10m + "m/s"
+    };
+  }
+
+  function renderWeatherPanel(loc, w) {
+    document.getElementById("weatherCity").textContent = loc.label;
+    document.getElementById("weatherTemp").textContent = w.temp;
+    document.getElementById("weatherDesc").textContent = w.desc;
+    document.getElementById("weatherHumidity").textContent = w.humidity;
+    document.getElementById("weatherWind").textContent = w.wind;
+    initScene(w.category, w.isDay);
+    updateOutfit(parseInt(w.temp, 10), w.category);
+  }
+
+  // ---- 옷차림 추천 (도트 그림) ----
+  const outfitCanvas = document.getElementById("outfitCanvas");
+  const octx = outfitCanvas.getContext("2d");
+  const OUTFIT_W = outfitCanvas.width;
+  const OUTFIT_H = outfitCanvas.height;
+
+  function getOutfit(tempNum, category) {
+    let outfit;
+    if (isNaN(tempNum)) {
+      outfit = { label: "-", bodyColor: "#9aa7b3", legColor: "#3a4055" };
+    } else if (tempNum >= 28) {
+      outfit = { label: "민소매·반바지", bodyColor: "#ff8a5b", legColor: "#4fa6ff", hasShorts: true, hasSunglasses: true };
+    } else if (tempNum >= 23) {
+      outfit = { label: "반팔·얇은 바지", bodyColor: "#ffd23c", legColor: "#4fa6ff" };
+    } else if (tempNum >= 20) {
+      outfit = { label: "긴팔·가디건", bodyColor: "#7fd858", legColor: "#3a4055" };
+    } else if (tempNum >= 17) {
+      outfit = { label: "얇은 니트·자켓", bodyColor: "#5b8dee", legColor: "#3a4055" };
+    } else if (tempNum >= 12) {
+      outfit = { label: "니트·코트", bodyColor: "#8b6b4a", legColor: "#2b2b3a", hasScarf: true };
+    } else if (tempNum >= 9) {
+      outfit = { label: "코트·히트텍", bodyColor: "#6b5a8a", legColor: "#2b2b3a", hasScarf: true };
+    } else if (tempNum >= 5) {
+      outfit = { label: "패딩·목도리", bodyColor: "#c0392b", legColor: "#1a1a2e", hasScarf: true, hasHat: true };
+    } else {
+      outfit = { label: "두꺼운 패딩·장갑", bodyColor: "#2b2b3a", legColor: "#1a1a2e", hasScarf: true, hasHat: true };
+    }
+
+    if (category === "rain" || category === "thunder") {
+      outfit.hasUmbrella = true;
+      outfit.label += " ☂";
+    }
+    if (category === "snow") {
+      outfit.hasHat = true;
+      outfit.label += " ❄";
+    }
+    return outfit;
+  }
+
+  function drawOutfit(outfit) {
+    octx.clearRect(0, 0, OUTFIT_W, OUTFIT_H);
+
+    let headTop = 2;
+    if (outfit.hasUmbrella) {
+      headTop = 5;
+      octx.fillStyle = "#4f95e0";
+      octx.fillRect(2, 0, 16, 2);
+      octx.fillRect(4, 2, 12, 1);
+      octx.fillStyle = "#2b2b3a";
+      octx.fillRect(9, 2, 1, 3);
+    }
+
+    if (outfit.hasHat) {
+      octx.fillStyle = "#2b2b3a";
+      octx.fillRect(6, headTop - 1, 8, 2);
+    }
+
+    octx.fillStyle = "#ffd8b0";
+    octx.fillRect(7, headTop + 1, 6, 5);
+
+    if (outfit.hasSunglasses) {
+      octx.fillStyle = "#1a1a2e";
+      octx.fillRect(7, headTop + 3, 2, 1);
+      octx.fillRect(11, headTop + 3, 2, 1);
+    }
+
+    if (outfit.hasScarf) {
+      octx.fillStyle = "#c0392b";
+      octx.fillRect(6, headTop + 6, 8, 1);
+    }
+
+    const bodyTop = headTop + 7;
+    octx.fillStyle = outfit.bodyColor;
+    octx.fillRect(6, bodyTop, 8, 7);
+    octx.fillRect(4, bodyTop, 2, 6);
+    octx.fillRect(14, bodyTop, 2, 6);
+
+    const legTop = bodyTop + 7;
+    if (outfit.hasShorts) {
+      octx.fillStyle = outfit.legColor;
+      octx.fillRect(6, legTop, 3, 2);
+      octx.fillRect(11, legTop, 3, 2);
+      octx.fillStyle = "#ffd8b0";
+      octx.fillRect(6, legTop + 2, 3, 3);
+      octx.fillRect(11, legTop + 2, 3, 3);
+    } else {
+      octx.fillStyle = outfit.legColor;
+      octx.fillRect(6, legTop, 3, 5);
+      octx.fillRect(11, legTop, 3, 5);
+    }
+  }
+
+  function updateOutfit(tempNum, category) {
+    const outfit = getOutfit(tempNum, category);
+    drawOutfit(outfit);
+    document.getElementById("outfitLabel").textContent = outfit.label;
+  }
+
+  async function loadWeather(loc) {
+    const badge = document.getElementById("weatherBadge");
+    badge.textContent = "불러오는 중...";
+    try {
+      const w = await fetchWeather(loc);
+      renderWeatherPanel(loc, w);
+      badge.textContent = "실시간 (Open-Meteo)";
+    } catch (err) {
+      badge.textContent = "불러오기 실패";
+      document.getElementById("weatherCity").textContent = loc.label;
+      document.getElementById("weatherTemp").textContent = "-";
+      document.getElementById("weatherDesc").textContent = "날씨 정보를 불러올 수 없어요";
+      document.getElementById("weatherHumidity").textContent = "-";
+      document.getElementById("weatherWind").textContent = "-";
+      updateOutfit(NaN, null);
+    }
+  }
+
+  // ============================================================
+  // 픽셀 아트 날씨 배경 (캔버스 기반, "데이브 더 다이버" 느낌의 도트 그래픽)
+  // ============================================================
+  const PIXEL_SIZE = 4;
+  const canvas = document.getElementById("bgCanvas");
+  const ctx = canvas.getContext("2d");
+
+  const SKY_PALETTES = {
+    "clear-day": ["#3a8ef0", "#63b1f5", "#a9dcff"],
+    "clear-night": ["#0a0e2a", "#171f4d", "#273268"],
+    "partlycloudy-day": ["#4f95e0", "#82b8ea", "#c3ddf2"],
+    "partlycloudy-night": ["#0e1233", "#1d2453", "#2d3768"],
+    "cloudy-day": ["#7c8b9a", "#9aa7b3", "#c1c9d1"],
+    "cloudy-night": ["#1b202b", "#2c313a", "#3d434c"],
+    "fog-day": ["#aab2b9", "#c3cad0", "#dde1e4"],
+    "fog-night": ["#242a32", "#353b44", "#464c54"],
+    "rain-day": ["#48545e", "#5f6d78", "#7c8a94"],
+    "rain-night": ["#0f1319", "#1d232b", "#2b313b"],
+    "snow-day": ["#9aabbb", "#bcccda", "#e0eaf2"],
+    "snow-night": ["#181e2c", "#293044", "#3b435a"],
+    "thunder-day": ["#1f2231", "#2d3141", "#3e4457"],
+    "thunder-night": ["#0d0f18", "#191c29", "#252939"]
+  };
+
+  const scene = {
+    category: "clear",
+    isDay: true,
+    clouds: [],
+    rain: [],
+    snow: [],
+    stars: [],
+    fog: [],
+    flashCooldown: 60,
+    flashFrames: 0
+  };
+
+  function resizeCanvas() {
+    canvas.width = Math.max(40, Math.ceil(window.innerWidth / PIXEL_SIZE));
+    canvas.height = Math.max(30, Math.ceil(window.innerHeight / PIXEL_SIZE));
+  }
+  window.addEventListener("resize", resizeCanvas);
+  resizeCanvas();
+
+  function initScene(category, isDay) {
+    scene.category = category;
+    scene.isDay = isDay;
+    scene.clouds = [];
+    scene.rain = [];
+    scene.snow = [];
+    scene.stars = [];
+    scene.fog = [];
+    scene.flashFrames = 0;
+
+    const cloudCount =
+      category === "partlycloudy" ? 2 :
+      (category === "cloudy" || category === "rain" || category === "thunder" || category === "snow") ? 4 : 0;
+    for (let i = 0; i < cloudCount; i++) {
+      scene.clouds.push({
+        x: Math.random(),
+        y: 0.08 + Math.random() * 0.3,
+        speed: (0.004 + Math.random() * 0.008) * (Math.random() < 0.5 ? 1 : -1),
+        scale: 0.8 + Math.random() * 0.7
+      });
+    }
+    if (category === "rain" || category === "thunder") {
+      const n = category === "thunder" ? 46 : 60;
+      for (let i = 0; i < n; i++) {
+        scene.rain.push({ x: Math.random(), y: Math.random(), speed: 0.5 + Math.random() * 0.35 });
+      }
+    }
+    if (category === "snow") {
+      for (let i = 0; i < 45; i++) {
+        scene.snow.push({ x: Math.random(), y: Math.random(), speed: 0.06 + Math.random() * 0.06, phase: Math.random() * Math.PI * 2 });
+      }
+    }
+    if (!isDay && category !== "fog") {
+      const n = category === "clear" ? 45 : category === "partlycloudy" ? 32 : 16;
+      for (let i = 0; i < n; i++) {
+        scene.stars.push({ x: Math.random(), y: Math.random() * 0.55, twinkle: Math.random() * 10 });
+      }
+    }
+    if (category === "fog") {
+      for (let i = 0; i < 5; i++) {
+        scene.fog.push({ y: 0.08 + i * 0.18, x: Math.random(), speed: (Math.random() < 0.5 ? 1 : -1) * (0.004 + Math.random() * 0.01) });
+      }
+    }
+  }
+  initScene("clear", true);
+
+  function drawPixelCircle(cx, cy, r, color) {
+    ctx.fillStyle = color;
+    const r2 = r * r;
+    const cxr = Math.round(cx), cyr = Math.round(cy);
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx * dx + dy * dy <= r2) ctx.fillRect(cxr + dx, cyr + dy, 1, 1);
+      }
+    }
+  }
+
+  function skyColors() {
+    return SKY_PALETTES[scene.category + "-" + (scene.isDay ? "day" : "night")] || SKY_PALETTES["cloudy-day"];
+  }
+
+  function drawSky() {
+    const colors = skyColors();
+    const n = colors.length;
+    const bandH = canvas.height / n;
+    for (let y = 0; y < canvas.height; y++) {
+      const pos = y / bandH;
+      const idx = Math.min(n - 1, Math.floor(pos));
+      const nextIdx = Math.min(n - 1, idx + 1);
+      const frac = pos - idx;
+      if (frac > 0.8 && idx !== nextIdx) {
+        for (let x = 0; x < canvas.width; x++) {
+          ctx.fillStyle = (x + y) % 2 === 0 ? colors[nextIdx] : colors[idx];
+          ctx.fillRect(x, y, 1, 1);
+        }
+      } else {
+        ctx.fillStyle = colors[idx];
+        ctx.fillRect(0, y, canvas.width, 1);
+      }
+    }
+  }
+
+  function drawSun() {
+    const cx = canvas.width * 0.82, cy = canvas.height * 0.16;
+    const r = Math.max(4, canvas.width * 0.028);
+    drawPixelCircle(cx, cy, r * 1.9, "rgba(255,215,110,0.18)");
+    drawPixelCircle(cx, cy, r * 1.3, "rgba(255,220,120,0.3)");
+    drawPixelCircle(cx, cy, r, "#ffd23c");
+    drawPixelCircle(cx - r * 0.3, cy - r * 0.3, r * 0.4, "#fff3b0");
+  }
+
+  function drawMoon() {
+    const cx = canvas.width * 0.82, cy = canvas.height * 0.14;
+    const r = Math.max(3, canvas.width * 0.022);
+    drawPixelCircle(cx, cy, r * 1.7, "rgba(255,250,220,0.14)");
+    drawPixelCircle(cx, cy, r, "#f2edd8");
+    drawPixelCircle(cx + r * 0.55, cy - r * 0.4, r * 0.9, skyColors()[0]);
+  }
+
+  function drawStars(t) {
+    scene.stars.forEach(s => {
+      const alpha = 0.35 + 0.65 * Math.abs(Math.sin(t * 0.0006 + s.twinkle));
+      ctx.fillStyle = "rgba(255,255,255," + alpha.toFixed(2) + ")";
+      ctx.fillRect(Math.floor(s.x * canvas.width), Math.floor(s.y * canvas.height), 1, 1);
+    });
+  }
+
+  function drawClouds(dt) {
+    const dark = scene.category === "cloudy" || scene.category === "rain" || scene.category === "thunder";
+    const unit = Math.max(1, canvas.width / 160);
+    ctx.fillStyle = dark ? "#c9d0d6" : "#ffffff";
+    scene.clouds.forEach(c => {
+      c.x += c.speed * dt * 0.025;
+      if (c.x > 1.3) c.x = -0.3;
+      if (c.x < -0.3) c.x = 1.3;
+      const bx = Math.round(c.x * canvas.width);
+      const by = Math.round(c.y * canvas.height);
+      const s = c.scale * unit;
+      ctx.fillRect(bx, by, Math.round(16 * s), Math.round(5 * s));
+      ctx.fillRect(bx + Math.round(4 * s), by - Math.round(4 * s), Math.round(9 * s), Math.round(5 * s));
+      ctx.fillRect(bx + Math.round(9 * s), by - Math.round(2 * s), Math.round(8 * s), Math.round(5 * s));
+    });
+  }
+
+  function drawRain(dt) {
+    ctx.strokeStyle = "rgba(180,210,255,0.85)";
+    scene.rain.forEach(r => {
+      r.y += r.speed * dt * 0.012;
+      if (r.y > 1) { r.y = 0; r.x = Math.random(); }
+      const x = Math.round(r.x * canvas.width), y = Math.round(r.y * canvas.height);
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 1, y + 3);
+      ctx.stroke();
+    });
+  }
+
+  function drawSnow(dt) {
+    ctx.fillStyle = "#ffffff";
+    scene.snow.forEach(s => {
+      s.y += s.speed * dt * 0.01;
+      s.phase += dt * 0.0006;
+      if (s.y > 1) { s.y = 0; s.x = Math.random(); }
+      const x = Math.round((s.x + Math.sin(s.phase) * 0.02) * canvas.width);
+      const y = Math.round(s.y * canvas.height);
+      ctx.fillRect(x, y, 1, 1);
+    });
+  }
+
+  function drawFog(dt) {
+    ctx.fillStyle = "rgba(255,255,255,0.28)";
+    scene.fog.forEach(f => {
+      f.x += f.speed * dt * 0.025;
+      const y = Math.round(f.y * canvas.height);
+      const bandH = Math.max(2, Math.round(canvas.height * 0.035));
+      ctx.fillRect(0, y, canvas.width, bandH);
+    });
+  }
+
+  function drawThunder(dt) {
+    if (scene.flashFrames > 0) {
+      ctx.fillStyle = "rgba(255,255,255,0.55)";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      scene.flashFrames--;
+    } else if (Math.random() < 0.004) {
+      scene.flashFrames = 2;
+    }
+  }
+
+  let lastTime = 0;
+  function renderLoop(t) {
+    const dt = Math.min(50, t - lastTime || 16);
+    lastTime = t;
+
+    drawSky();
+    if (!scene.isDay) drawStars(t);
+    if (scene.category === "clear" || scene.category === "partlycloudy") {
+      if (scene.isDay) drawSun(); else drawMoon();
+    }
+    drawClouds(dt);
+    if (scene.category === "fog") drawFog(dt);
+    if (scene.category === "rain" || scene.category === "thunder") drawRain(dt);
+    if (scene.category === "snow") drawSnow(dt);
+    if (scene.category === "thunder") drawThunder(dt);
+
+    requestAnimationFrame(renderLoop);
+  }
+  requestAnimationFrame(renderLoop);
+
+  // ============================================================
+  // 항공편 위치 3D 도트 지구본 (회전하는 점묘 지구 + 항공기 마커)
+  // ============================================================
+  const DEG2RAD = Math.PI / 180;
+  const GLOBE_PIXEL_SIZE = 3;
+  const globeCanvas = document.getElementById("globeCanvas");
+  const gctx = globeCanvas.getContext("2d");
+
+  // 캔버스 박스는 가로로 넓게 늘어나지만, 지구본 반지름은 "짧은 변" 기준으로 고정해
+  // 원이 절대 타원으로 찌그러지지 않도록 함. 남는 좌우 공간은 우주 배경(별)으로 채움.
+  let GLOBE_R = 0, GLOBE_CX = 0, GLOBE_CY = 0;
+
+  const globeStars = []; // 상대 좌표(0~1)로 저장해서 캔버스 크기가 바뀌어도 재사용
+  for (let i = 0; i < 140; i++) {
+    globeStars.push({ xf: Math.random(), yf: Math.random(), a: 0.15 + Math.random() * 0.65, tw: Math.random() * 10 });
+  }
+
+  function resizeGlobeCanvas() {
+    const rect = globeCanvas.getBoundingClientRect();
+    const w = Math.max(40, Math.round(rect.width / GLOBE_PIXEL_SIZE));
+    const h = Math.max(24, Math.round(rect.height / GLOBE_PIXEL_SIZE));
+    globeCanvas.width = w;
+    globeCanvas.height = h;
+    GLOBE_CX = w / 2;
+    GLOBE_CY = h / 2;
+    GLOBE_R = Math.min(w, h) * 0.46; // 짧은 변 기준 -> 항상 정원(正圓)
+  }
+  window.addEventListener("resize", resizeGlobeCanvas);
+  resizeGlobeCanvas();
+
+  let planeState = null; // { lat, lon } 또는 null
+
+  // 실시간 위치가 없을 때 대략적인 경로라도 보여주기 위한 주요 공항 좌표
+  const AIRPORT_COORDS = {
+    ICN: [37.4602, 126.4407], GMP: [37.5583, 126.7906], PUS: [35.1795, 128.9382],
+    NRT: [35.7647, 140.3864], HND: [35.5494, 139.7798], KIX: [34.4347, 135.2441],
+    PVG: [31.1443, 121.8083], PEK: [40.0801, 116.5846], HKG: [22.3080, 113.9185],
+    TPE: [25.0777, 121.2328], SIN: [1.3644, 103.9915], BKK: [13.6900, 100.7501],
+    KUL: [2.7456, 101.7099], CGK: [-6.1256, 106.6559], MNL: [14.5086, 121.0198],
+    DEL: [28.5562, 77.1000], BOM: [19.0896, 72.8656], DXB: [25.2532, 55.3657],
+    DOH: [25.2609, 51.6138], TLV: [32.0114, 34.8867], IST: [41.2753, 28.7519],
+    LHR: [51.4700, -0.4543], LGW: [51.1537, -0.1821], CDG: [49.0097, 2.5479],
+    FRA: [50.0379, 8.5622], AMS: [52.3105, 4.7683], MAD: [40.4983, -3.5676],
+    FCO: [41.8003, 12.2389], ZRH: [47.4647, 8.5492], VIE: [48.1103, 16.5697],
+    SVO: [55.9736, 37.4125], JFK: [40.6413, -73.7781], EWR: [40.6895, -74.1745],
+    LGA: [40.7769, -73.8740], IAD: [38.9531, -77.4565], ORD: [41.9742, -87.9073],
+    DFW: [32.8998, -97.0403], DEN: [39.8561, -104.6737], LAX: [33.9416, -118.4085],
+    SFO: [37.6213, -122.3790], SEA: [47.4502, -122.3088], YYZ: [43.6777, -79.6248],
+    YVR: [49.1967, -123.1815], MEX: [19.4363, -99.0721], GRU: [-23.4356, -46.4731],
+    EZE: [-34.8222, -58.5358], SCL: [-33.3930, -70.7858], LIM: [-12.0219, -77.1143],
+    BOG: [4.7016, -74.1469], SYD: [-33.9399, 151.1753], MEL: [-37.6690, 144.8410],
+    AKL: [-37.0082, 174.7850], CAI: [30.1219, 31.4056], JNB: [-26.1392, 28.2460],
+    NBO: [-1.3192, 36.9278]
+  };
+
+  function latLonToVec3(lat, lon) {
+    const latRad = lat * DEG2RAD, lonRad = lon * DEG2RAD;
+    return {
+      x: Math.cos(latRad) * Math.sin(lonRad),
+      y: Math.sin(latRad),
+      z: Math.cos(latRad) * Math.cos(lonRad)
+    };
+  }
+
+  function vec3ToLatLon(v) {
+    const lat = Math.asin(Math.max(-1, Math.min(1, v.y))) / DEG2RAD;
+    const lon = Math.atan2(v.x, v.z) / DEG2RAD;
+    return { lat, lon };
+  }
+
+  // 두 좌표 사이를 구면 위에서 부드럽게 보간(slerp) - 대략적인 이동 경로 애니메이션용
+  function slerpLatLon(lat0, lon0, lat1, lon1, frac) {
+    const p0 = latLonToVec3(lat0, lon0);
+    const p1 = latLonToVec3(lat1, lon1);
+    const dot = Math.max(-1, Math.min(1, p0.x * p1.x + p0.y * p1.y + p0.z * p1.z));
+    const omega = Math.acos(dot);
+    if (omega < 1e-6) return { lat: lat0, lon: lon0 };
+    const sinOmega = Math.sin(omega);
+    const a = Math.sin((1 - frac) * omega) / sinOmega;
+    const b = Math.sin(frac * omega) / sinOmega;
+    return vec3ToLatLon({
+      x: a * p0.x + b * p1.x,
+      y: a * p0.y + b * p1.y,
+      z: a * p0.z + b * p1.z
+    });
+  }
+
+  function projectGlobe(lat, lon, rotationDeg, tiltDeg) {
+    const latRad = lat * DEG2RAD, lonRad = lon * DEG2RAD;
+    const x = Math.cos(latRad) * Math.sin(lonRad);
+    const y = Math.sin(latRad);
+    const z = Math.cos(latRad) * Math.cos(lonRad);
+
+    const rRad = rotationDeg * DEG2RAD;
+    const x1 = x * Math.cos(rRad) + z * Math.sin(rRad);
+    const z1 = -x * Math.sin(rRad) + z * Math.cos(rRad);
+
+    const tRad = tiltDeg * DEG2RAD;
+    const y2 = y * Math.cos(tRad) - z1 * Math.sin(tRad);
+    const z2 = y * Math.sin(tRad) + z1 * Math.cos(tRad);
+
+    return { sx: GLOBE_CX + x1 * GLOBE_R, sy: GLOBE_CY - y2 * GLOBE_R, z: z2 };
+  }
+
+  function drawGlobe(t) {
+    const w = globeCanvas.width, h = globeCanvas.height;
+
+    gctx.fillStyle = "#060814";
+    gctx.fillRect(0, 0, w, h);
+
+    globeStars.forEach(s => {
+      const tw = 0.6 + 0.4 * Math.sin(t * 0.001 + s.tw);
+      gctx.fillStyle = "rgba(255,255,255," + (s.a * tw).toFixed(2) + ")";
+      gctx.fillRect(Math.floor(s.xf * w), Math.floor(s.yf * h), 1, 1);
+    });
+
+    // path 모드(정확한 위치 없음)일 땐 출발-도착 사이를 왕복하는 대략적인 위치를 계산
+    let focusLat = null, focusLon = null, curLat = null, curLon = null;
+    if (planeState && planeState.mode === "exact") {
+      focusLat = curLat = planeState.lat;
+      focusLon = curLon = planeState.lon;
+    } else if (planeState && planeState.mode === "path") {
+      const loopMs = 7000;
+      const phase = (t % loopMs) / loopMs;
+      const frac = 1 - Math.abs(1 - 2 * phase); // 0 -> 1 -> 0 왕복
+      const cur = slerpLatLon(planeState.fromLat, planeState.fromLon, planeState.toLat, planeState.toLon, frac);
+      focusLat = cur.lat; focusLon = cur.lon;
+      curLat = cur.lat; curLon = cur.lon;
+    }
+
+    const tiltDeg = 0;
+    const rotationDeg = planeState
+      ? -focusLon + Math.sin(t * 0.0004) * 12
+      : (t * 0.01) % 360;
+
+    for (let lat = -85; lat <= 85; lat += 13) {
+      for (let lon = 0; lon < 360; lon += 11) {
+        const p = projectGlobe(lat, lon, rotationDeg, tiltDeg);
+        if (p.z > 0.02) {
+          const bright = 0.35 + 0.55 * p.z;
+          gctx.fillStyle = "rgba(120,190,255," + bright.toFixed(2) + ")";
+          gctx.fillRect(Math.round(p.sx), Math.round(p.sy), 1, 1);
+        }
+      }
+    }
+
+    if (planeState && planeState.mode === "path") {
+      // 대략적인 이동 경로(점선 호)와 출발/도착 지점 표시
+      const steps = 24;
+      for (let i = 0; i <= steps; i++) {
+        const f = i / steps;
+        const pt = slerpLatLon(planeState.fromLat, planeState.fromLon, planeState.toLat, planeState.toLon, f);
+        const p = projectGlobe(pt.lat, pt.lon, rotationDeg, tiltDeg);
+        if (p.z > 0.02 && i % 2 === 0) {
+          gctx.fillStyle = "rgba(255,255,255,0.45)";
+          gctx.fillRect(Math.round(p.sx), Math.round(p.sy), 1, 1);
+        }
+      }
+      const from = projectGlobe(planeState.fromLat, planeState.fromLon, rotationDeg, tiltDeg);
+      if (from.z > 0.02) {
+        gctx.fillStyle = "#7fd858";
+        gctx.fillRect(Math.round(from.sx) - 1, Math.round(from.sy) - 1, 2, 2);
+      }
+      const to = projectGlobe(planeState.toLat, planeState.toLon, rotationDeg, tiltDeg);
+      if (to.z > 0.02) {
+        gctx.fillStyle = "#5b8dee";
+        gctx.fillRect(Math.round(to.sx) - 1, Math.round(to.sy) - 1, 2, 2);
+      }
+    }
+
+    if (planeState && curLat != null) {
+      const p = projectGlobe(curLat, curLon, rotationDeg, tiltDeg);
+      const pulse = Math.round(2 + Math.sin(t * 0.006) * 0.8 + 0.8);
+      const markerColor = planeState.mode === "path" ? "#ffd23c" : "#ff5a36";
+      gctx.fillStyle = planeState.mode === "path" ? "rgba(255,210,60,0.35)" : "rgba(255,120,60,0.35)";
+      gctx.fillRect(Math.round(p.sx) - 2, Math.round(p.sy) - 2, 5, 5);
+      gctx.fillStyle = markerColor;
+      gctx.fillRect(Math.round(p.sx) - Math.floor(pulse / 2), Math.round(p.sy) - Math.floor(pulse / 2), pulse, pulse);
+    }
+
+    requestAnimationFrame(drawGlobe);
+  }
+  requestAnimationFrame(drawGlobe);
+
+  // 비행 도착 시간 계산기
+  const flightFromSelect = document.getElementById("flightFrom");
+  const flightToSelect = document.getElementById("flightTo");
+  populateSelect(flightFromSelect);
+  populateSelect(flightToSelect);
+  flightFromSelect.value = "newjersey";
+  flightToSelect.value = "seoul";
+  document.getElementById("departTime").value = localValue;
+
+  // 두 도시 간 대략적인 거리로 비행 시간을 자동 추정 (사용자가 이후에 직접 수정 가능)
+  function haversineKm(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * DEG2RAD;
+    const dLon = (lon2 - lon1) * DEG2RAD;
+    const a = Math.sin(dLat / 2) ** 2 +
+      Math.cos(lat1 * DEG2RAD) * Math.cos(lat2 * DEG2RAD) * Math.sin(dLon / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function applyEstimatedDuration() {
+    const fromLoc = findLoc(flightFromSelect.value);
+    const toLoc = findLoc(flightToSelect.value);
+    if (!fromLoc || !toLoc || fromLoc.id === toLoc.id) return;
+
+    const distanceKm = haversineKm(fromLoc.lat, fromLoc.lon, toLoc.lat, toLoc.lon);
+    const cruiseSpeedKmh = 850;
+    const overheadMinutes = 30; // 이착륙·활주 등 여유 시간
+    const totalMinutes = Math.round((distanceKm / cruiseSpeedKmh) * 60 + overheadMinutes);
+
+    document.getElementById("flightHours").value = Math.floor(totalMinutes / 60);
+    document.getElementById("flightMinutes").value = Math.round((totalMinutes % 60) / 5) * 5;
+  }
+
+  function handleRouteChange() {
+    applyEstimatedDuration();
+    calcFlight();
+  }
+
+  function calcFlight() {
+    const departVal = document.getElementById("departTime").value;
+    if (!departVal) return;
+
+    const fromLoc = findLoc(flightFromSelect.value);
+    const toLoc = findLoc(flightToSelect.value);
+    const hours = Number(document.getElementById("flightHours").value) || 0;
+    const minutes = Number(document.getElementById("flightMinutes").value) || 0;
+
+    // 입력된 출발 일시를 "출발 도시의 현지 시각"으로 해석
+    const [datePart, timePart] = departVal.split("T");
+    const [y, m, d] = datePart.split("-").map(Number);
+    const [hh, mm] = timePart.split(":").map(Number);
+    const naiveUtc = Date.UTC(y, m - 1, d, hh, mm);
+    const fromOffset = getUtcOffsetMinutes(new Date(naiveUtc), fromLoc.tz);
+    const departUtcMs = naiveUtc - fromOffset * 60000;
+    const arriveUtcMs = departUtcMs + (hours * 60 + minutes) * 60000;
+
+    const departFmt = formatInTz(new Date(departUtcMs), fromLoc.tz);
+    const arriveFmt = formatInTz(new Date(arriveUtcMs), toLoc.tz);
+
+    document.getElementById("flightFromLabel").textContent = fromLoc.label + " 출발";
+    document.getElementById("flightDepartOut").textContent = departFmt.time;
+    document.getElementById("flightDepartDateOut").textContent = departFmt.date;
+
+    document.getElementById("flightToLabel").textContent = toLoc.label + " 도착";
+    document.getElementById("flightArriveOut").textContent = arriveFmt.time;
+    document.getElementById("flightArriveDateOut").textContent = arriveFmt.date;
+
+    const durParts = [];
+    if (hours > 0) durParts.push(hours + "시간");
+    if (minutes > 0) durParts.push(minutes + "분");
+    document.getElementById("flightDurationOut").textContent =
+      "총 비행 시간 " + (durParts.join(" ") || "0분");
+
+    loadWeather(toLoc);
+  }
+
+  document.getElementById("flightBtn").addEventListener("click", calcFlight);
+  flightFromSelect.addEventListener("change", handleRouteChange);
+  flightToSelect.addEventListener("change", handleRouteChange);
+  applyEstimatedDuration();
+  calcFlight();
+
+  // ---- 실시간 항공편 위치/지연 추적 (AviationStack) ----
+  // OpenSky Network는 브라우저 CORS를 자사 사이트로만 허용해서(Access-Control-Allow-Origin이
+  // opensky-network.org 고정) 이 페이지 같은 정적 파일에서는 직접 호출이 불가능함 -> 제외.
+  //
+  // 아래 기본 키는 이 파일을 공유받는 모두가 함께 쓰는 공용 키입니다(무료 플랜, 월 100회 제한).
+  // 남용되면 모두가 못 쓰게 되니, 필요하면 각자 aviationstack.com에서 무료 키를 발급받아
+  // 위 입력창에 넣어 쓰는 걸 권장합니다.
+  const DEFAULT_AVSTACK_KEY = "4efc6e55e35dd88d0addf76567d5d3c8";
+  const avKeyInput = document.getElementById("avKey");
+  avKeyInput.value = localStorage.getItem("avstack_key") || "";
+
+  const FLIGHT_STATUS_LABEL = {
+    scheduled: "예정",
+    active: "비행 중",
+    landed: "착륙 완료",
+    cancelled: "취소",
+    incident: "사고/이상",
+    diverted: "회항"
+  };
+
+  function formatIso(iso) {
+    if (!iso) return "-";
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return "-";
+    return d.toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hour12: false });
+  }
+
+  async function trackViaAviationStack(key, flightNum) {
+    const url = "https://api.aviationstack.com/v1/flights?access_key=" + encodeURIComponent(key) +
+      "&flight_iata=" + encodeURIComponent(flightNum);
+    const res = await fetch(url);
+    const data = await res.json();
+
+    if (data.error) {
+      throw new Error(data.error.message || "조회 중 오류가 발생했습니다.");
+    }
+    const flight = data.data && data.data[0];
+    if (!flight) {
+      throw new Error("해당 편명을 찾을 수 없습니다. 편명을 확인해주세요.");
+    }
+
+    document.getElementById("trackScheduleRow").style.display = "";
+
+    const statusKey = flight.flight_status;
+    document.getElementById("trackStatus").textContent =
+      (flight.airline && flight.airline.name ? flight.airline.name + " " : "") +
+      (flight.flight && flight.flight.iata ? flight.flight.iata : flightNum) + " · " +
+      (FLIGHT_STATUS_LABEL[statusKey] || statusKey || "상태 불명");
+
+    const dep = flight.departure || {};
+    const arr = flight.arrival || {};
+
+    document.getElementById("trackDepLabel").textContent = (dep.iata || "?") + " 출발";
+    document.getElementById("trackDepTime").textContent = formatIso(dep.actual || dep.estimated || dep.scheduled);
+    document.getElementById("trackDepDelay").textContent = dep.delay ? ("지연 " + dep.delay + "분") : "정시";
+
+    document.getElementById("trackArrLabel").textContent = (arr.iata || "?") + " 도착";
+    document.getElementById("trackArrTime").textContent = formatIso(arr.actual || arr.estimated || arr.scheduled);
+    document.getElementById("trackArrDelay").textContent = arr.delay ? ("지연 " + arr.delay + "분") : "정시";
+
+    const live = flight.live;
+    const globeInfo = document.getElementById("globeInfo");
+    const flightLabel = flight.flight && flight.flight.iata ? flight.flight.iata : flightNum;
+
+    if (live && live.latitude != null) {
+      document.getElementById("trackLive").textContent =
+        "📍 현재 위치 " + live.latitude.toFixed(2) + ", " + live.longitude.toFixed(2) +
+        " · 고도 " + Math.round(live.altitude) + "m · 속도 " + Math.round(live.speed_horizontal) + "km/h";
+
+      planeState = { mode: "exact", lat: live.latitude, lon: live.longitude };
+      globeInfo.innerHTML =
+        "<b>" + flightLabel + "</b> 현재 위치<br>" +
+        "위도 " + live.latitude.toFixed(2) + ", 경도 " + live.longitude.toFixed(2) + "<br>" +
+        "고도 " + Math.round(live.altitude) + "m · 속도 " + Math.round(live.speed_horizontal) + "km/h";
+    } else {
+      const fromCoord = AIRPORT_COORDS[dep.iata];
+      const toCoord = AIRPORT_COORDS[arr.iata];
+      if (fromCoord && toCoord) {
+        document.getElementById("trackLive").textContent =
+          "실시간 위치 정보는 없지만, 대략적인 이동 방향(" + dep.iata + " → " + arr.iata + ")을 지구본에 표시했어요.";
+
+        planeState = {
+          mode: "path",
+          fromLat: fromCoord[0], fromLon: fromCoord[1],
+          toLat: toCoord[0], toLon: toCoord[1]
+        };
+        globeInfo.innerHTML =
+          "<b>" + flightLabel + "</b> 대략적인 방향<br>" +
+          dep.iata + " → " + arr.iata + "<br>" +
+          "(정확한 실시간 위치 아님)";
+      } else {
+        document.getElementById("trackLive").textContent =
+          "실시간 위치 정보 없음 (현재 비행 중이 아니거나 요금제상 제공되지 않을 수 있어요)";
+        planeState = null;
+        globeInfo.textContent = "실시간 위치 정보가 없어 지구본만 표시돼요.";
+      }
+    }
+  }
+
+  async function trackFlight() {
+    const enteredKey = avKeyInput.value.trim();
+    const key = enteredKey || DEFAULT_AVSTACK_KEY;
+    const flightNum = document.getElementById("flightNumber").value.trim().toUpperCase();
+    const errBox = document.getElementById("trackError");
+    const resultBox = document.getElementById("trackResult");
+    errBox.style.display = "none";
+    resultBox.style.display = "none";
+
+    if (!flightNum) {
+      errBox.textContent = "편명을 입력해주세요.";
+      errBox.style.display = "block";
+      return;
+    }
+    if (enteredKey) {
+      localStorage.setItem("avstack_key", enteredKey);
+    }
+
+    const btn = document.getElementById("trackBtn");
+    btn.textContent = "조회 중...";
+    btn.disabled = true;
+
+    try {
+      await trackViaAviationStack(key, flightNum);
+      resultBox.style.display = "block";
+    } catch (err) {
+      errBox.textContent = err.message || "조회에 실패했습니다. API 키/편명을 확인하거나 잠시 후 다시 시도해주세요.";
+      errBox.style.display = "block";
+    } finally {
+      btn.textContent = "조회";
+      btn.disabled = false;
+    }
+  }
+
+  document.getElementById("trackBtn").addEventListener("click", trackFlight);
+
+  // ---- 지금 떠 있는 항공편 목록에서 고르기 (AviationStack flight_status=active) ----
+  // 공용 키의 월 100회 한도를 아끼기 위해 자동 폴링은 하지 않고, 토글을 켜거나
+  // ↻ 버튼을 눌렀을 때만 그 시점 기준 최신 목록을 새로 불러옴.
+  async function loadLiveFlights() {
+    const select = document.getElementById("liveFlightSelect");
+    const refreshBtn = document.getElementById("liveListRefresh");
+    const key = avKeyInput.value.trim() || DEFAULT_AVSTACK_KEY;
+
+    select.innerHTML = '<option value="">불러오는 중...</option>';
+    select.disabled = true;
+    refreshBtn.disabled = true;
+
+    try {
+      const url = "https://api.aviationstack.com/v1/flights?access_key=" + encodeURIComponent(key) +
+        "&flight_status=active&limit=100";
+      const res = await fetch(url);
+      const data = await res.json();
+      if (data.error) throw new Error(data.error.message || "목록을 불러오지 못했습니다.");
+
+      const flights = (data.data || []).filter(f => f.flight && f.flight.iata);
+
+      select.innerHTML = "";
+      const placeholder = document.createElement("option");
+      placeholder.value = "";
+      placeholder.textContent = flights.length
+        ? "편명을 선택하세요 (" + flights.length + "개 비행 중)"
+        : "현재 불러올 수 있는 항공편이 없어요";
+      select.appendChild(placeholder);
+
+      flights.forEach(f => {
+        const opt = document.createElement("option");
+        opt.value = f.flight.iata;
+        const route = (f.departure && f.departure.iata || "?") + "→" + (f.arrival && f.arrival.iata || "?");
+        opt.textContent = f.flight.iata + " · " + (f.airline && f.airline.name || "") + " · " + route;
+        select.appendChild(opt);
+      });
+    } catch (err) {
+      select.innerHTML = '<option value="">불러오기 실패 - ↻ 버튼으로 다시 시도해주세요</option>';
+    } finally {
+      select.disabled = false;
+      refreshBtn.disabled = false;
+    }
+  }
+
+  document.getElementById("liveListToggle").addEventListener("change", (e) => {
+    const row = document.getElementById("liveSelectRow");
+    const textInput = document.getElementById("flightNumber");
+    if (e.target.checked) {
+      textInput.style.display = "none";
+      row.style.display = "flex";
+      loadLiveFlights();
+    } else {
+      textInput.style.display = "";
+      row.style.display = "none";
+    }
+  });
+
+  document.getElementById("liveFlightSelect").addEventListener("change", (e) => {
+    if (e.target.value) {
+      document.getElementById("flightNumber").value = e.target.value;
+    }
+  });
+
+  document.getElementById("liveListRefresh").addEventListener("click", loadLiveFlights);
+
+  // ---- 화면 크기에 맞춰 전체 레이아웃을 축소해 스크롤 없이 한눈에 보이게 함 ----
+  // (모바일 폭에서는 억지로 축소하지 않고, 세로 1단 스택 + 자연 스크롤로 보여줌)
+  const MOBILE_QUERY = window.matchMedia("(max-width: 700px)");
+  function fitToScreen() {
+    const app = document.getElementById("app");
+    if (MOBILE_QUERY.matches) {
+      app.style.transform = "none";
+      return;
+    }
+    app.style.transform = "scale(1)";
+    const rect = app.getBoundingClientRect();
+    const scaleX = (window.innerWidth - 20) / rect.width;
+    const scaleY = (window.innerHeight - 20) / rect.height;
+    const scale = Math.min(1, scaleX, scaleY);
+    app.style.transform = "scale(" + scale + ")";
+  }
+  window.addEventListener("resize", fitToScreen);
+  MOBILE_QUERY.addEventListener("change", fitToScreen);
+  fitToScreen();
+</script>
+</body>
+</html>
