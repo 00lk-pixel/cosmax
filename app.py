@@ -3,7 +3,7 @@ import streamlit.components.v1 as components
 from pathlib import Path
 
 st.set_page_config(
-    page_title="세계 시차 & 날씨 변환기",
+    page_title="Hey, I miss you",
     page_icon="✈️",
     layout="wide",
 )
